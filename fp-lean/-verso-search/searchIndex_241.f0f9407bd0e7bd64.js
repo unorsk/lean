@@ -1,0 +1,1 @@
+window.docContents[241].resolve({"/#alternative":{"contents":"\n\n\n\n\n\n","context":"Functional Programming in Lean\u0009Functors, Applicative Functors, and Monads","header":"5.4. Alternatives","id":"/#alternative"}});

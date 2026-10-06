@@ -1,0 +1,1 @@
+window.docContents[106].resolve({"/#type-classes-summary":{"contents":"\n\n\n\n\n\n\n\n\n\n","context":"Functional Programming in Lean\u0009Overloading and Type Classes","header":"3.8. Summary","id":"/#type-classes-summary"}});
