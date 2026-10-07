@@ -1,1 +1,0 @@
-window.docContents[103].resolve({"/#Fin-exercises":{"contents":"Write a function  that returns the next largest  when it would be in bounds, or  if not.\nCheck that\n\n\n\noutputs\n\n\n\nand that\n\n\n\noutputs\n\n\n\n","context":"Functional Programming in Lean\u0009Programming, Proving, and Performance\u0009Bounded Numbers","header":"8.5.1. Exercise","id":"/#Fin-exercises"}});

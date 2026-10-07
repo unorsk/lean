@@ -1,1 +1,0 @@
-window.docContents[246].resolve({"/#hello-world-summary":{"contents":"\n\n\n\n\n\n\n\n","context":"Functional Programming in Lean\u0009Hello, World!","header":"2.6. Summary","id":"/#hello-world-summary"}});

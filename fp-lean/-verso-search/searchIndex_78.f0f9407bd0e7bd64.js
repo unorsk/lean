@@ -1,1 +1,0 @@
-window.docContents[78].resolve({"/#tail-recursion-proof-exercises":{"contents":"\n\n\n\n","context":"Functional Programming in Lean\u0009Programming, Proving, and Performance\u0009Proving Equivalence","header":"8.2.4. Exercise","id":"/#tail-recursion-proof-exercises"}});

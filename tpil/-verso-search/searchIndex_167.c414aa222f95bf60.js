@@ -1,1 +1,0 @@
-window.docContents[167].resolve({"/#structuring-conversion-tactics":{"contents":"Curly brackets and . can also be used in conv mode to structure tactics:\n\n\n\n","context":"Theorem Proving in Lean 4\u0009The Conversion Tactic Mode","header":"11.3. Structuring conversion tactics","id":"/#structuring-conversion-tactics"}});

@@ -1,1 +1,0 @@
-window.docContents[166].resolve({"/#dependent-types-summary":{"contents":"\n\n\n\n\n\n\n\n","context":"Functional Programming in Lean\u0009Programming with Dependent Types","header":"7.6. Summary","id":"/#dependent-types-summary"}});

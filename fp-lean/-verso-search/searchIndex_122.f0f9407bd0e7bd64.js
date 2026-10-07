@@ -1,1 +1,0 @@
-window.docContents[122].resolve({"/#evaluating-exercises":{"contents":"What are the values of the following expressions? Work them out by hand,\nthen enter them into Lean to check your work.\n\n* * * * * \n\n\n","context":"Functional Programming in Lean\u0009Getting to Know Lean\u0009Evaluating Expressions","header":"1.1.2. Exercises","id":"/#evaluating-exercises"}});

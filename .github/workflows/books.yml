@@ -1,0 +1,205 @@
+name: Books
+
+# Builds the single-page editions of the books and publishes them to GitHub Pages.
+#
+# Every night, the latest commits of the books are compared with the commits that the published
+# site was built from (`versions.json` on the site). The books are rebuilt only when one of them, or
+# this repository, has changed since. A push here or a manual run rebuilds them too, because this
+# repository's commit is part of the comparison; a manual run can also force a rebuild.
+
+on:
+  schedule:
+    # 03:17 UTC: at night in Europe, and off the hour, when scheduled runs queue up
+    - cron: '17 3 * * *'
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      force:
+        description: Rebuild even if nothing has changed
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+env:
+  SITE_URL: https://unorsk.github.io/lean
+
+jobs:
+  check:
+    name: Check for changes
+    runs-on: ubuntu-latest
+    outputs:
+      changed: ${{ steps.compare.outputs.changed }}
+      fp-lean: ${{ steps.compare.outputs.fp-lean }}
+      tpil: ${{ steps.compare.outputs.tpil }}
+    steps:
+      - name: Compare with the published site
+        id: compare
+        env:
+          FORCE: ${{ inputs.force || 'false' }}
+        run: |
+          head_of() { git ls-remote "https://github.com/$1" refs/heads/master | cut -f1; }
+          fp_lean=$(head_of leanprover/fp-lean)
+          tpil=$(head_of leanprover/theorem_proving_in_lean4)
+          if [ -z "$fp_lean" ] || [ -z "$tpil" ]; then
+            echo "could not read the books' latest commits" >&2
+            exit 1
+          fi
+          current=$(jq -cn --arg site "$GITHUB_SHA" --arg fp "$fp_lean" --arg tpil "$tpil" \
+            '{site: $site, "fp-lean": $fp, tpil: $tpil}')
+          published=$(curl -fsSL "$SITE_URL/versions.json" | jq -c '{site, "fp-lean", tpil}' || echo none)
+          echo "published: $published"
+          echo "current:   $current"
+          if [ "$FORCE" = "true" ] || [ "$current" != "$published" ]; then
+            changed=true
+          else
+            changed=false
+          fi
+          {
+            echo "changed=$changed"
+            echo "fp-lean=$fp_lean"
+            echo "tpil=$tpil"
+          } >> "$GITHUB_OUTPUT"
+
+  build:
+    name: Build ${{ matrix.name }}
+    needs: check
+    if: needs.check.outputs.changed == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - name: fp-lean
+            repo: leanprover/fp-lean
+            exe: fp-lean
+          - name: tpil
+            repo: leanprover/theorem_proving_in_lean4
+            exe: tpil
+    steps:
+      - name: Checkout this repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: site-repo
+          persist-credentials: false
+
+      - name: Checkout the book
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ matrix.repo }}
+          ref: ${{ needs.check.outputs[matrix.name] }}
+          path: book-repo
+          persist-credentials: false
+
+      - name: Install a C compiler
+        run: sudo apt-get install -y build-essential
+
+      # fp-lean runs a Python interpreter during its build and shows the output, so its own CI pins
+      # the version. The same version is used here.
+      - name: Setup Python
+        if: matrix.name == 'fp-lean'
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: 3.10.4
+
+      - name: Setup elan
+        run: |
+          curl -fsSL -o elan-init.sh https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh
+          sh elan-init.sh -y --default-toolchain none
+          echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
+
+      - name: Install the Lean toolchains
+        run: |
+          (cd book-repo/examples && lean --version)
+          (cd book-repo/book && lean --version)
+
+      # The caches are keyed like the books' own CI: the same dependencies and toolchain restore the
+      # most recent build products, and a different one starts over.
+      - name: Cache examples/.lake
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: book-repo/examples/.lake
+          key: ${{ matrix.name }}-examples-${{ hashFiles('book-repo/examples/lake-manifest.json', 'book-repo/examples/lean-toolchain') }}-${{ needs.check.outputs[matrix.name] }}
+          restore-keys: |
+            ${{ matrix.name }}-examples-${{ hashFiles('book-repo/examples/lake-manifest.json', 'book-repo/examples/lean-toolchain') }}-
+
+      - name: Cache book/.lake
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: book-repo/book/.lake
+          key: ${{ matrix.name }}-book-${{ hashFiles('book-repo/book/lake-manifest.json', 'book-repo/book/lean-toolchain', 'book-repo/examples/lake-manifest.json', 'book-repo/examples/lean-toolchain') }}-${{ needs.check.outputs[matrix.name] }}
+          restore-keys: |
+            ${{ matrix.name }}-book-${{ hashFiles('book-repo/book/lake-manifest.json', 'book-repo/book/lean-toolchain', 'book-repo/examples/lake-manifest.json', 'book-repo/examples/lean-toolchain') }}-
+
+      - name: Build the examples
+        working-directory: book-repo/examples
+        run: |
+          lake build
+          lake build subverso-extract-mod
+
+      - name: Render the single page
+        working-directory: book-repo/book
+        run: lake exe ${{ matrix.exe }} --with-html-single --without-html-multi
+
+      - name: Adapt the single page
+        run: site-repo/scripts/single-page.sh book-repo/book/_out/html-single out/${{ matrix.name }}
+
+      - name: Upload the book
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: book-${{ matrix.name }}
+          path: out/${{ matrix.name }}
+          retention-days: 3
+          if-no-files-found: error
+
+  deploy:
+    name: Deploy
+    needs: [check, build]
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Checkout this repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Download the books
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: book-*
+          path: books
+
+      - name: Assemble the site
+        env:
+          FP_LEAN: ${{ needs.check.outputs.fp-lean }}
+          TPIL: ${{ needs.check.outputs.tpil }}
+        run: |
+          mkdir _site
+          cp -R site/. _site/
+          mv books/book-fp-lean _site/fp-lean
+          mv books/book-tpil _site/tpil
+          jq -n --arg site "$GITHUB_SHA" --arg fp "$FP_LEAN" --arg tpil "$TPIL" \
+            --arg built "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            '{site: $site, "fp-lean": $fp, tpil: $tpil, built: $built}' > _site/versions.json
+          cat _site/versions.json
+
+      - name: Configure Pages
+        uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
+
+      - name: Upload the site
+        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
